@@ -1,0 +1,30 @@
+Options -MultiViews
+
+RewriteEngine On
+
+RewriteRule ^favicon\.ico$ /favicon.svg [R=301,L]
+
+RewriteCond %{THE_REQUEST} \s/+index\.php[?\s] [NC]
+RewriteRule ^index\.php$ / [R=301,L]
+
+RewriteCond %{THE_REQUEST} \s/+statistics\.php[?\s] [NC]
+RewriteRule ^statistics\.php$ /statistics [R=301,L]
+RewriteRule ^statistiken(?:/index\.php|/)?$ /statistics [R=301,L]
+RewriteRule ^statistics(?:/index\.php|/)$ /statistics [R=301,L]
+
+RewriteCond %{THE_REQUEST} \s/+openings\.php[?\s] [NC]
+RewriteRule ^openings\.php$ /openings [R=301,L]
+RewriteRule ^eroeffnungen(?:/index\.php|/)?$ /openings [R=301,L]
+RewriteRule ^openings(?:/index\.php|/)$ /openings [R=301,L]
+
+RewriteCond %{THE_REQUEST} \s/+blunders\.php[?\s] [NC]
+RewriteRule ^blunders\.php$ /blunders [R=301,L]
+RewriteRule ^blunders(?:/index\.php|/)$ /blunders [R=301,L]
+
+RewriteRule ^api/random-game(?:/index\.php|/)?$ /api/random [R=301,L]
+RewriteRule ^api/random/$ /api/random [R=301,L]
+
+RewriteRule ^statistics$ /statistics.php [END]
+RewriteRule ^openings$ /openings.php [END]
+RewriteRule ^blunders$ /blunders.php [END]
+RewriteRule ^api/random$ /api.php?action=random-game [END,QSA]

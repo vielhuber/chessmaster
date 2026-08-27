@@ -1,0 +1,17 @@
+{
+    "name": "chessmaster",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "prod": "node scripts/build.mjs"
+    },
+    "devDependencies": {
+        "chart.js": "^4.5.1",
+        "chess.js": "^1.4.0",
+        "stockfish": "^18.0.8"
+    },
+    "allowScripts": {
+        "stockfish": false
+    },
+    "version": "1.0.0"
+}
