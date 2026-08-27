@@ -3,12 +3,14 @@
 
 # ♞ chessmaster ♞
 
-chessmaster is a small php application that imports Chess.com games and displays their history, statistics, openings and blunders.
+chessmaster is a small php application that imports your games from [chess.com](https://www.chess.com) and displays their history, statistics, openings and blunders.
 
 ## installation
 
 ```sh
-npm install && npm update && npm run prod
+git clone git@github.com:vielhuber/chessmaster.git .
+npm install
+npm run prod
 cp .env.example .env
 php -S localhost:8080 -t _public
 ```
@@ -19,5 +21,3 @@ php -S localhost:8080 -t _public
 USERNAME=vielhuber
 DATABASE=_data/chessmaster.sqlite
 ```
-
-the document root must point to `_public`.
