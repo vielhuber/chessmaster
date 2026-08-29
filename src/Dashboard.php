@@ -8,6 +8,7 @@ final readonly class Dashboard
     /**
      * @param list<TimeClassStatistic> $timeClasses
      * @param list<MonthlyStatistic> $months
+     * @param list<LossReasonStatistic> $lossReasons
      * @param list<OpeningStatistic> $openings
      * @param list<OpeningExample> $openingExamples
      */
@@ -15,6 +16,7 @@ final readonly class Dashboard
         public Summary $summary,
         public array $timeClasses,
         public array $months,
+        public array $lossReasons,
         public array $openings,
         public ?OpeningStatistic $bestOpening,
         public ?OpeningStatistic $worstOpening,

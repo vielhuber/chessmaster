@@ -75,11 +75,12 @@ final class GameRepository
             $gameStatement = $this->database->prepare(
                 'INSERT OR IGNORE INTO games (
                     url, player_username, opponent, player_color, player_rating, opponent_rating,
-                    player_result, opponent_result, score, played_at, time_class, time_control, rules,
+                    player_result, opponent_result, loss_reason, score, played_at, time_class, time_control, rules,
                     rated, player_accuracy, opponent_accuracy, opening_name, opening_url, pgn, raw_json
                 ) VALUES (
                     :url, :player_username, :opponent, :player_color, :player_rating, :opponent_rating,
-                    :player_result, :opponent_result, :score, :played_at, :time_class, :time_control, :rules,
+                    :player_result, :opponent_result, :loss_reason, :score, :played_at,
+                    :time_class, :time_control, :rules,
                     :rated, :player_accuracy, :opponent_accuracy, :opening_name, :opening_url, :pgn, :raw_json
                 )',
             );
@@ -95,6 +96,7 @@ final class GameRepository
                     'opponent_rating' => $game->opponentRating,
                     'player_result' => $game->playerResult,
                     'opponent_result' => $game->opponentResult,
+                    'loss_reason' => $game->lossReason?->value,
                     'score' => $game->score,
                     'played_at' => $game->playedAt,
                     'time_class' => $game->timeClass,
@@ -226,6 +228,15 @@ final class GameRepository
                 ),
             );
 
+            $lossReasonRows = $this->fetchAll(
+                'SELECT loss_reason, COUNT(*) AS games
+                 FROM games
+                 WHERE player_username = :username AND score = 0
+                 GROUP BY loss_reason
+                 ORDER BY games DESC, loss_reason IS NULL, loss_reason',
+                $username,
+            );
+
             $openingRows = $this->fetchAll(
                 'SELECT opening_name, score
                  FROM games
@@ -263,6 +274,15 @@ final class GameRepository
                 scorePercentage: (float) $row['score_percentage'],
             ),
             $monthRows,
+        );
+        $lossReasons = array_map(
+            static fn(array $row): LossReasonStatistic => new LossReasonStatistic(
+                reason: LossReason::tryFrom((string) ($row['loss_reason'] ?? '')),
+                games: (int) $row['games'],
+                percentage:
+                    $summary->losses === 0 ? 0.0 : ((int) $row['games'] / $summary->losses) * 100,
+            ),
+            $lossReasonRows,
         );
         $openingGroups = [];
         foreach ($openingRows as $openingRow) {
@@ -399,6 +419,7 @@ final class GameRepository
             summary: $summary,
             timeClasses: $timeClasses,
             months: $months,
+            lossReasons: $lossReasons,
             openings: $openings,
             bestOpening: $bestOpening,
             worstOpening: $worstOpening,
@@ -450,6 +471,7 @@ final class GameRepository
                 opponent_rating INTEGER,
                 player_result TEXT NOT NULL,
                 opponent_result TEXT NOT NULL,
+                loss_reason TEXT,
                 score REAL NOT NULL,
                 played_at INTEGER NOT NULL,
                 time_class TEXT NOT NULL,
@@ -472,6 +494,20 @@ final class GameRepository
                 imported_at INTEGER NOT NULL
             );',
         );
+
+        $gameColumns = $this->database->query('PRAGMA table_info(games)')->fetchAll();
+        if (!in_array('loss_reason', array_column($gameColumns, 'name'), true)) {
+            $this->database->exec('ALTER TABLE games ADD COLUMN loss_reason TEXT');
+        }
+
+        $lossReasonValues = array_map(static fn(LossReason $reason): string => $reason->value, LossReason::cases());
+        $lossReasonPlaceholders = implode(', ', array_fill(0, count($lossReasonValues), '?'));
+        $backfillStatement = $this->database->prepare(
+            'UPDATE games
+             SET loss_reason = player_result
+             WHERE score = 0 AND loss_reason IS NULL AND player_result IN (' . $lossReasonPlaceholders . ')',
+        );
+        $backfillStatement->execute($lossReasonValues);
     }
 
     /** @return array<string, mixed> */

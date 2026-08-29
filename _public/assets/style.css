@@ -336,6 +336,10 @@ td small {
     margin-top: 10px;
 }
 
+.statistic-table {
+    margin-top: 10px;
+}
+
 .ratings strong,
 .ratings small {
     display: block;

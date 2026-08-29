@@ -89,7 +89,12 @@ $navigation = [
             <div class="panel table-panel">
                 <div class="table-scroll">
                     <table>
-                        <thead><tr><th>Datum</th><th>Gegner</th><th>Score</th><th>Farbe</th><th>Rating</th><th>Tempo</th><th>Eröffnung</th><th>Partie</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Datum</th><th>Gegner</th><th>Score</th><th>Niederlagengrund</th><th>Farbe</th>
+                                <th>Rating</th><th>Tempo</th><th>Eröffnung</th><th>Partie</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <?php foreach ($history->games as $game): ?>
                                 <?php
@@ -113,6 +118,11 @@ $navigation = [
                                     <td><span class="result <?= $resultClass($game->score) ?>"><?= $score(
     $game->score,
 ) ?></span></td>
+                                    <td><?= $game->lossReason !== null
+                                        ? $escape($game->lossReason->label())
+                                        : ($game->score === 0.0
+                                            ? 'Nicht ermittelbar'
+                                            : '–') ?></td>
                                     <td><?= $game->playerColor === 'white' ? 'Weiß' : 'Schwarz' ?></td>
                                     <td><?= $game->playerRating ?? '–' ?></td>
                                     <td><?= $escape(ucfirst($game->timeClass)) ?><small><?= $escape(
@@ -194,6 +204,30 @@ $navigation = [
 ) ?> % · <?= $timeClass->games ?> Spiele</small></article>
                 <?php endforeach; ?>
             </div>
+
+            <?php if ($dashboard->summary->losses > 0): ?>
+                <div class="panel table-panel statistic-table">
+                    <div class="panel-title">
+                        <h2>Niederlagengründe</h2><span><?= $dashboard->summary->losses ?> Niederlagen</span>
+                    </div>
+                    <div class="table-scroll">
+                        <table>
+                            <thead><tr><th>Grund</th><th>Partien</th><th>Anteil</th></tr></thead>
+                            <tbody>
+                                <?php foreach ($dashboard->lossReasons as $lossReason): ?>
+                                    <tr>
+                                        <td><?= $lossReason->reason === null
+                                            ? 'Nicht ermittelbar'
+                                            : $escape($lossReason->reason->label()) ?></td>
+                                        <td><?= $lossReason->games ?></td>
+                                        <td><?= number_format($lossReason->percentage, 1, ',', '.') ?> %</td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
             <script id="dashboard-data" type="application/json"><?= $chartData ?></script>
         <?php endif; ?>
 
