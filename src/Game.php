@@ -20,6 +20,7 @@ final readonly class Game
         public string $playerResult,
         public string $opponentResult,
         public ?LossReason $lossReason,
+        public ?int $lossAnalysisVersion,
         public float $score,
         public int $playedAt,
         public string $timeClass,
@@ -72,6 +73,7 @@ final readonly class Game
         $opponentAccuracy = $accuracies[$isWhite ? 'black' : 'white'] ?? null;
         $openingUrl = is_string($data['eco'] ?? null) ? $data['eco'] : null;
         $pgn = (string) ($data['pgn'] ?? '');
+        $rules = (string) ($data['rules'] ?? 'chess');
         if ($openingUrl === null && preg_match('/\[ECOUrl "([^"]+)"\]/', $pgn, $matches) === 1) {
             $openingUrl = $matches[1];
         }
@@ -95,6 +97,19 @@ final readonly class Game
             throw ChessmasterException::api('Eine Chess.com-Partie enthält keine URL.');
         }
 
+        $lossReason = null;
+        $lossAnalysisVersion = null;
+        if ($score === 0.0) {
+            $lossReason = match ($playerResult) {
+                'timeout' => LossReason::TooSlow,
+                'abandoned' => LossReason::Abandoned,
+                default => LossReason::Unknown,
+            };
+            if ($lossReason !== LossReason::Unknown || $rules !== 'chess' || $pgn === '') {
+                $lossAnalysisVersion = LossReason::ANALYSIS_VERSION;
+            }
+        }
+
         return new self(
             url: $url,
             playerUsername: $username,
@@ -104,12 +119,13 @@ final readonly class Game
             opponentRating: isset($opponent['rating']) ? (int) $opponent['rating'] : null,
             playerResult: $playerResult,
             opponentResult: $opponentResult,
-            lossReason: $score === 0.0 ? LossReason::tryFrom($playerResult) : null,
+            lossReason: $lossReason,
+            lossAnalysisVersion: $lossAnalysisVersion,
             score: $score,
             playedAt: (int) ($data['end_time'] ?? 0),
             timeClass: (string) ($data['time_class'] ?? 'unknown'),
             timeControl: (string) ($data['time_control'] ?? ''),
-            rules: (string) ($data['rules'] ?? 'chess'),
+            rules: $rules,
             rated: (bool) ($data['rated'] ?? false),
             playerAccuracy: is_numeric($playerAccuracy) ? (float) $playerAccuracy : null,
             opponentAccuracy: is_numeric($opponentAccuracy) ? (float) $opponentAccuracy : null,
@@ -136,7 +152,11 @@ final readonly class Game
             opponentRating: $row['opponent_rating'] !== null ? (int) $row['opponent_rating'] : null,
             playerResult: (string) $row['player_result'],
             opponentResult: (string) $row['opponent_result'],
-            lossReason: LossReason::tryFrom((string) ($row['loss_reason'] ?? '')),
+            lossReason:
+                LossReason::tryFrom((string) ($row['loss_reason'] ?? '')) ??
+                ((float) $row['score'] === 0.0 ? LossReason::Unknown : null),
+            lossAnalysisVersion:
+                ($row['loss_analysis_version'] ?? null) !== null ? (int) $row['loss_analysis_version'] : null,
             score: (float) $row['score'],
             playedAt: (int) $row['played_at'],
             timeClass: (string) $row['time_class'],

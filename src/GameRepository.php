@@ -75,11 +75,12 @@ final class GameRepository
             $gameStatement = $this->database->prepare(
                 'INSERT OR IGNORE INTO games (
                     url, player_username, opponent, player_color, player_rating, opponent_rating,
-                    player_result, opponent_result, loss_reason, score, played_at, time_class, time_control, rules,
+                    player_result, opponent_result, loss_reason, loss_analysis_version, score, played_at,
+                    time_class, time_control, rules,
                     rated, player_accuracy, opponent_accuracy, opening_name, opening_url, pgn, raw_json
                 ) VALUES (
                     :url, :player_username, :opponent, :player_color, :player_rating, :opponent_rating,
-                    :player_result, :opponent_result, :loss_reason, :score, :played_at,
+                    :player_result, :opponent_result, :loss_reason, :loss_analysis_version, :score, :played_at,
                     :time_class, :time_control, :rules,
                     :rated, :player_accuracy, :opponent_accuracy, :opening_name, :opening_url, :pgn, :raw_json
                 )',
@@ -97,6 +98,7 @@ final class GameRepository
                     'player_result' => $game->playerResult,
                     'opponent_result' => $game->opponentResult,
                     'loss_reason' => $game->lossReason?->value,
+                    'loss_analysis_version' => $game->lossAnalysisVersion,
                     'score' => $game->score,
                     'played_at' => $game->playedAt,
                     'time_class' => $game->timeClass,
@@ -233,7 +235,14 @@ final class GameRepository
                  FROM games
                  WHERE player_username = :username AND score = 0
                  GROUP BY loss_reason
-                 ORDER BY games DESC, loss_reason IS NULL, loss_reason',
+                 ORDER BY games DESC,
+                    CASE loss_reason
+                        WHEN \'blunder\' THEN 1
+                        WHEN \'outplayed\' THEN 2
+                        WHEN \'too_slow\' THEN 3
+                        WHEN \'abandoned\' THEN 4
+                        ELSE 5
+                    END',
                 $username,
             );
 
@@ -277,7 +286,7 @@ final class GameRepository
         );
         $lossReasons = array_map(
             static fn(array $row): LossReasonStatistic => new LossReasonStatistic(
-                reason: LossReason::tryFrom((string) ($row['loss_reason'] ?? '')),
+                reason: LossReason::tryFrom((string) ($row['loss_reason'] ?? '')) ?? LossReason::Unknown,
                 games: (int) $row['games'],
                 percentage:
                     $summary->losses === 0 ? 0.0 : ((int) $row['games'] / $summary->losses) * 100,
@@ -449,6 +458,68 @@ final class GameRepository
     }
 
     /**
+     * Resume the oldest standard loss that still needs engine analysis.
+     */
+    public function pendingLossAnalysis(string $username): ?Game
+    {
+        try {
+            $statement = $this->database->prepare(
+                'SELECT * FROM games
+                 WHERE player_username = :username
+                   AND score = 0
+                   AND rules = \'chess\'
+                   AND pgn <> \'\'
+                   AND loss_reason IN (:unknown, :blunder, :outplayed)
+                   AND (loss_analysis_version IS NULL OR loss_analysis_version < :version)
+                 ORDER BY played_at, url
+                 LIMIT 1',
+            );
+            $statement->execute([
+                'username' => strtolower($username),
+                'unknown' => LossReason::Unknown->value,
+                'blunder' => LossReason::Blunder->value,
+                'outplayed' => LossReason::Outplayed->value,
+                'version' => LossReason::ANALYSIS_VERSION,
+            ]);
+            $row = $statement->fetch();
+        } catch (PDOException $exception) {
+            throw ChessmasterException::storage('Eine Niederlage konnte nicht zur Analyse geladen werden.', $exception);
+        }
+
+        return is_array($row) ? Game::fromDatabase($row) : null;
+    }
+
+    /**
+     * Persist one reproducible engine classification for later statistics.
+     */
+    public function completeLossAnalysis(string $username, string $url, LossReason $reason): bool
+    {
+        try {
+            $statement = $this->database->prepare(
+                'UPDATE games
+                 SET loss_reason = :reason, loss_analysis_version = :version
+                 WHERE url = :url
+                   AND player_username = :username
+                   AND score = 0
+                   AND rules = \'chess\'
+                   AND pgn <> \'\'
+                   AND player_result NOT IN (\'timeout\', \'abandoned\')
+                   AND :reason IN (\'blunder\', \'outplayed\', \'unknown\')',
+            );
+            $statement->execute([
+                'reason' => $reason->value,
+                'version' => LossReason::ANALYSIS_VERSION,
+                'url' => $url,
+                'username' => strtolower($username),
+            ]);
+
+            return $statement->rowCount() === 1;
+        } catch (PDOException $exception) {
+            throw ChessmasterException::storage('Der Niederlagengrund konnte nicht gespeichert werden.', $exception);
+        }
+    }
+
+    /**
      * Coordinate concurrent web imports through a file beside the database.
      */
     public function lockPath(): string
@@ -472,6 +543,7 @@ final class GameRepository
                 player_result TEXT NOT NULL,
                 opponent_result TEXT NOT NULL,
                 loss_reason TEXT,
+                loss_analysis_version INTEGER,
                 score REAL NOT NULL,
                 played_at INTEGER NOT NULL,
                 time_class TEXT NOT NULL,
@@ -496,18 +568,46 @@ final class GameRepository
         );
 
         $gameColumns = $this->database->query('PRAGMA table_info(games)')->fetchAll();
+        $requiresLossReasonMigration = !in_array('loss_analysis_version', array_column($gameColumns, 'name'), true);
         if (!in_array('loss_reason', array_column($gameColumns, 'name'), true)) {
             $this->database->exec('ALTER TABLE games ADD COLUMN loss_reason TEXT');
         }
+        if ($requiresLossReasonMigration) {
+            $this->database->exec('ALTER TABLE games ADD COLUMN loss_analysis_version INTEGER');
+        }
+        if (!$requiresLossReasonMigration) {
+            return;
+        }
 
-        $lossReasonValues = array_map(static fn(LossReason $reason): string => $reason->value, LossReason::cases());
-        $lossReasonPlaceholders = implode(', ', array_fill(0, count($lossReasonValues), '?'));
-        $backfillStatement = $this->database->prepare(
-            'UPDATE games
-             SET loss_reason = player_result
-             WHERE score = 0 AND loss_reason IS NULL AND player_result IN (' . $lossReasonPlaceholders . ')',
+        $analysisVersion = LossReason::ANALYSIS_VERSION;
+        $this->database->exec(
+            <<<SQL
+            UPDATE games SET loss_reason = NULL, loss_analysis_version = NULL WHERE score <> 0;
+            UPDATE games
+            SET loss_reason = 'too_slow', loss_analysis_version = {$analysisVersion}
+            WHERE score = 0 AND player_result = 'timeout';
+            UPDATE games
+            SET loss_reason = 'abandoned', loss_analysis_version = {$analysisVersion}
+            WHERE score = 0 AND player_result = 'abandoned';
+            UPDATE games
+            SET loss_reason = 'unknown',
+                loss_analysis_version = CASE
+                    WHEN rules = 'chess' AND pgn <> '' THEN NULL
+                    ELSE {$analysisVersion}
+                END
+            WHERE score = 0
+              AND player_result NOT IN ('timeout', 'abandoned')
+              AND (
+                  loss_reason IS NULL OR
+                  loss_reason NOT IN ('blunder', 'outplayed', 'too_slow', 'abandoned', 'unknown')
+              );
+            UPDATE games
+            SET loss_analysis_version = {$analysisVersion}
+            WHERE score = 0
+              AND loss_reason = 'unknown'
+              AND (rules <> 'chess' OR pgn = '');
+            SQL,
         );
-        $backfillStatement->execute($lossReasonValues);
     }
 
     /** @return array<string, mixed> */

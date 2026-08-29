@@ -1,4 +1,5 @@
 import { Chess } from './chess.js';
+import LossReasonClassifier from './loss-reason-classifier.js';
 
 class Charts {
     static DATA_SELECTOR = '#dashboard-data';
@@ -334,10 +335,180 @@ class OpeningExamples {
     }
 }
 
+class StockfishEvaluator {
+    static DEPTH = 10;
+
+    constructor() {
+        this.worker = null;
+        this.workerReady = null;
+        this.analysis = null;
+        this.queue = Promise.resolve();
+    }
+
+    evaluate(fen) {
+        let evaluation = this.queue.then(async () => {
+            await this.prepareWorker();
+
+            return new Promise(resolve => {
+                this.analysis = { resolve, score: 0, bestMove: null };
+                this.worker.postMessage(`position fen ${fen}`);
+                this.worker.postMessage(`go depth ${StockfishEvaluator.DEPTH}`);
+            });
+        });
+        this.queue = evaluation.catch(() => undefined);
+
+        return evaluation;
+    }
+
+    async prepareWorker() {
+        if (this.workerReady !== null) {
+            return this.workerReady;
+        }
+
+        this.workerReady = new Promise((resolve, reject) => {
+            this.worker = new Worker('/assets/stockfish-18-lite-single.js');
+            let timeout = window.setTimeout(() => reject(new Error('Stockfish konnte nicht gestartet werden.')), 20000);
+            this.worker.onerror = () => reject(new Error('Stockfish konnte nicht geladen werden.'));
+            this.worker.onmessage = event => {
+                let lines = String(event.data).split('\n');
+                lines.forEach(line => {
+                    if (line === 'uciok') {
+                        this.worker.postMessage('isready');
+                    }
+                    if (line === 'readyok') {
+                        window.clearTimeout(timeout);
+                        resolve();
+                    }
+                    this.consumeAnalysisLine(line);
+                });
+            };
+            this.worker.postMessage('uci');
+        });
+
+        return this.workerReady;
+    }
+
+    consumeAnalysisLine(line) {
+        if (this.analysis === null) {
+            return;
+        }
+
+        let centipawns = line.match(/\bscore cp (-?\d+)/);
+        let mate = line.match(/\bscore mate (-?\d+)/);
+        let variation = line.match(/\bpv ([a-h][1-8][a-h][1-8][qrbn]?)/);
+        if (centipawns) {
+            this.analysis.score = Number(centipawns[1]);
+        }
+        if (mate) {
+            this.analysis.score = Number(mate[1]) > 0 ? 100000 : -100000;
+        }
+        if (variation) {
+            this.analysis.bestMove = variation[1];
+        }
+        if (!line.startsWith('bestmove')) {
+            return;
+        }
+
+        let bestMove = line.match(/^bestmove\s+(\S+)/);
+        let result = {
+            score: this.analysis.score,
+            bestMove: this.analysis.bestMove || bestMove?.[1] || null
+        };
+        let resolve = this.analysis.resolve;
+        this.analysis = null;
+        resolve(result);
+    }
+}
+
+class LossReasonAnalyzer {
+    static ENDPOINT = '/api/loss-analysis';
+
+    constructor(stockfish) {
+        this.stockfish = stockfish;
+        this.$status = document.querySelector('#loss-analysis-status');
+    }
+
+    async load() {
+        if (document.querySelector('#chessboard')) {
+            return;
+        }
+
+        let analyzedGames = 0;
+
+        try {
+            while (true) {
+                let response = await fetch(LossReasonAnalyzer.ENDPOINT, { headers: { Accept: 'application/json' } });
+                let data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Eine Niederlage konnte nicht geladen werden.');
+                }
+
+                let game = data.game;
+                if (game === null) {
+                    break;
+                }
+
+                this.showStatus(`Analysiere Niederlage ${analyzedGames + 1} …`);
+                let reason = await this.analyzeGame(game);
+                let saveResponse = await fetch(LossReasonAnalyzer.ENDPOINT, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: game.url, reason })
+                });
+                if (!saveResponse.ok) {
+                    let saveData = await saveResponse.json();
+                    throw new Error(saveData.error || 'Der Niederlagengrund konnte nicht gespeichert werden.');
+                }
+                analyzedGames += 1;
+            }
+
+            if (analyzedGames > 0) {
+                window.location.reload();
+            }
+        } catch {
+            this.showStatus('Stockfish-Analyse pausiert');
+        }
+    }
+
+    async analyzeGame(game) {
+        let chess = new Chess();
+        try {
+            chess.loadPgn(game.pgn);
+        } catch {
+            return 'unknown';
+        }
+
+        let color = game.playerColor === 'white' ? 'w' : 'b';
+        let moves = chess.history({ verbose: true }).filter(move => move.color === color);
+        if (moves.length === 0) {
+            return 'unknown';
+        }
+
+        for (let move of moves) {
+            let before = await this.stockfish.evaluate(move.before);
+            let after = await this.stockfish.evaluate(move.after);
+            if (LossReasonClassifier.isBlunder(before.score, after.score)) {
+                return 'blunder';
+            }
+        }
+
+        return 'outplayed';
+    }
+
+    showStatus(message) {
+        if (!this.$status) {
+            return;
+        }
+
+        this.$status.textContent = message;
+        this.$status.hidden = false;
+    }
+}
+
 class BlunderTrainer {
     static MINIMUM_BLUNDER_LOSS = 100;
 
-    constructor() {
+    constructor(stockfish) {
         this.$board = document.querySelector('#chessboard');
         this.$placeholder = document.querySelector('#board-placeholder');
         this.$placeholderText = this.$placeholder?.querySelector('p');
@@ -356,9 +527,7 @@ class BlunderTrainer {
         this.$next = document.querySelector('#board-next');
         this.$boardPosition = document.querySelector('#board-position');
         this.boardView = this.$board ? new ChessboardView(this.$board) : null;
-        this.worker = null;
-        this.workerReady = null;
-        this.analysis = null;
+        this.stockfish = stockfish;
         this.position = null;
         this.orientation = 'white';
         this.selectedSquare = null;
@@ -451,8 +620,8 @@ class BlunderTrainer {
         for (let index = 0; index < moves.length; index += 1) {
             this.$description.textContent = `Analysiere Zug ${index + 1} von ${moves.length} gegen ${game.opponent} …`;
             this.$progressBar.style.width = `${((index + 1) / moves.length) * 100}%`;
-            let before = await this.evaluate(moves[index].before);
-            let after = await this.evaluate(moves[index].after);
+            let before = await this.stockfish.evaluate(moves[index].before);
+            let after = await this.stockfish.evaluate(moves[index].after);
             let loss = Math.max(0, before.score + after.score);
             if (loss < BlunderTrainer.MINIMUM_BLUNDER_LOSS) {
                 continue;
@@ -495,78 +664,6 @@ class BlunderTrainer {
         return candidate.loss > currentCandidate.loss;
     }
 
-    async evaluate(fen) {
-        await this.prepareWorker();
-        if (this.analysis !== null) {
-            throw new Error('Stockfish verarbeitet bereits eine Stellung.');
-        }
-
-        return new Promise(resolve => {
-            this.analysis = { resolve, score: 0, bestMove: null };
-            this.worker.postMessage(`position fen ${fen}`);
-            this.worker.postMessage('go depth 10');
-        });
-    }
-
-    async prepareWorker() {
-        if (this.workerReady !== null) {
-            return this.workerReady;
-        }
-
-        this.workerReady = new Promise((resolve, reject) => {
-            this.worker = new Worker('/assets/stockfish-18-lite-single.js');
-            let timeout = window.setTimeout(() => reject(new Error('Stockfish konnte nicht gestartet werden.')), 20000);
-            this.worker.onerror = () => reject(new Error('Stockfish konnte nicht geladen werden.'));
-            this.worker.onmessage = event => {
-                let lines = String(event.data).split('\n');
-                lines.forEach(line => {
-                    if (line === 'uciok') {
-                        this.worker.postMessage('isready');
-                    }
-                    if (line === 'readyok') {
-                        window.clearTimeout(timeout);
-                        resolve();
-                    }
-                    this.consumeAnalysisLine(line);
-                });
-            };
-            this.worker.postMessage('uci');
-        });
-
-        return this.workerReady;
-    }
-
-    consumeAnalysisLine(line) {
-        if (this.analysis === null) {
-            return;
-        }
-
-        let centipawns = line.match(/\bscore cp (-?\d+)/);
-        let mate = line.match(/\bscore mate (-?\d+)/);
-        let variation = line.match(/\bpv ([a-h][1-8][a-h][1-8][qrbn]?)/);
-        if (centipawns) {
-            this.analysis.score = Number(centipawns[1]);
-        }
-        if (mate) {
-            this.analysis.score = Number(mate[1]) > 0 ? 100000 : -100000;
-        }
-        if (variation) {
-            this.analysis.bestMove = variation[1];
-        }
-        if (!line.startsWith('bestmove')) {
-            return;
-        }
-
-        let bestMove = line.match(/^bestmove\s+(\S+)/);
-        let result = {
-            score: this.analysis.score,
-            bestMove: this.analysis.bestMove || bestMove?.[1] || null
-        };
-        let resolve = this.analysis.resolve;
-        this.analysis = null;
-        resolve(result);
-    }
-
     showCandidate(candidate) {
         let game = new Chess();
         game.loadPgn(candidate.game.pgn);
@@ -604,7 +701,7 @@ class BlunderTrainer {
     }
 
     async showReviewPosition(ply) {
-        if (this.analysis !== null) {
+        if (this.stockfish.analysis !== null) {
             return;
         }
 
@@ -625,7 +722,7 @@ class BlunderTrainer {
 
         try {
             let turn = this.position.turn();
-            let evaluation = await this.evaluate(this.position.fen());
+            let evaluation = await this.stockfish.evaluate(this.position.fen());
             this.updateEvaluation(turn === 'w' ? evaluation.score : -evaluation.score);
             this.answering = this.currentPly === this.trainingPly;
             this.$feedback.textContent = this.answering
@@ -710,7 +807,7 @@ class BlunderTrainer {
 
     async evaluateAnswer(move) {
         this.$feedback.textContent = 'Bewerte deinen Zug …';
-        let after = await this.evaluate(this.position.fen());
+        let after = await this.stockfish.evaluate(this.position.fen());
         this.updateEvaluation(this.position.turn() === 'w' ? after.score : -after.score);
         let playerScore = -after.score;
         let loss = Math.max(0, this.candidate.bestScore - playerScore);
@@ -771,6 +868,8 @@ class BlunderTrainer {
     }
 }
 
+let stockfish = new StockfishEvaluator();
 new Charts().load();
 new OpeningExamples().load();
-new BlunderTrainer().load();
+new LossReasonAnalyzer(stockfish).load();
+new BlunderTrainer(stockfish).load();

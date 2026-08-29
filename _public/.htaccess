@@ -23,8 +23,10 @@ RewriteRule ^blunders(?:/index\.php|/)$ /blunders [R=301,L]
 
 RewriteRule ^api/random-game(?:/index\.php|/)?$ /api/random [R=301,L]
 RewriteRule ^api/random/$ /api/random [R=301,L]
+RewriteRule ^api/loss-analysis/$ /api/loss-analysis [R=301,L]
 
 RewriteRule ^statistics$ /statistics.php [END]
 RewriteRule ^openings$ /openings.php [END]
 RewriteRule ^blunders$ /blunders.php [END]
 RewriteRule ^api/random$ /api.php?action=random-game [END,QSA]
+RewriteRule ^api/loss-analysis$ /api.php?action=loss-analysis [END,QSA]

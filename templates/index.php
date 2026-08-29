@@ -45,11 +45,7 @@ $navigation = [
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/assets/style.css">
     <?php if ($page === Page::Statistics): ?><script src="/assets/chart.umd.min.js" defer></script><?php endif; ?>
-    <?php if (
-        $page === Page::Statistics ||
-        $page === Page::Openings ||
-        $page === Page::Blunders
-    ): ?><script type="module" src="/assets/app.js"></script><?php endif; ?>
+    <script type="module" src="/assets/app.js"></script>
 </head>
 <body>
     <header class="site-header">
@@ -63,6 +59,7 @@ $navigation = [
                 <?php endforeach; ?>
             </nav>
             <form class="sync" method="post" action="<?= $navigation[$page->value]['url'] ?>">
+                <span class="sync-status" id="loss-analysis-status" hidden></span>
                 <?php if ($importResult->downloadedArchives + $importResult->skippedArchives > 0): ?>
                     <span class="sync-status"><?= $importResult->addedGames ?> neu</span>
                 <?php endif; ?>
@@ -118,11 +115,7 @@ $navigation = [
                                     <td><span class="result <?= $resultClass($game->score) ?>"><?= $score(
     $game->score,
 ) ?></span></td>
-                                    <td><?= $game->lossReason !== null
-                                        ? $escape($game->lossReason->label())
-                                        : ($game->score === 0.0
-                                            ? 'Nicht ermittelbar'
-                                            : '–') ?></td>
+                                    <td><?= $game->lossReason !== null ? $escape($game->lossReason->label()) : '–' ?></td>
                                     <td><?= $game->playerColor === 'white' ? 'Weiß' : 'Schwarz' ?></td>
                                     <td><?= $game->playerRating ?? '–' ?></td>
                                     <td><?= $escape(ucfirst($game->timeClass)) ?><small><?= $escape(
@@ -216,9 +209,7 @@ $navigation = [
                             <tbody>
                                 <?php foreach ($dashboard->lossReasons as $lossReason): ?>
                                     <tr>
-                                        <td><?= $lossReason->reason === null
-                                            ? 'Nicht ermittelbar'
-                                            : $escape($lossReason->reason->label()) ?></td>
+                                        <td><?= $escape($lossReason->reason->label()) ?></td>
                                         <td><?= $lossReason->games ?></td>
                                         <td><?= number_format($lossReason->percentage, 1, ',', '.') ?> %</td>
                                     </tr>

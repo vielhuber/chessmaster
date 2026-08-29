@@ -5,29 +5,25 @@ namespace vielhuber\chessmaster;
 
 enum LossReason: string
 {
-    case Checkmated = 'checkmated';
-    case Timeout = 'timeout';
-    case Resigned = 'resigned';
-    case Lose = 'lose';
+    public const ANALYSIS_VERSION = 1;
+
+    case Blunder = 'blunder';
+    case Outplayed = 'outplayed';
+    case TooSlow = 'too_slow';
     case Abandoned = 'abandoned';
-    case KingOfTheHill = 'kingofthehill';
-    case ThreeCheck = 'threecheck';
-    case BughousePartnerLose = 'bughousepartnerlose';
+    case Unknown = 'unknown';
 
     /**
-     * Translate the documented API result without changing its meaning.
+     * Expose the stable label used by history and statistics.
      */
     public function label(): string
     {
         return match ($this) {
-            self::Checkmated => 'Schachmatt',
-            self::Timeout => 'Zeitüberschreitung',
-            self::Resigned => 'Aufgabe',
-            self::Lose => 'Sonstige Niederlage',
+            self::Blunder => 'Blunder',
+            self::Outplayed => 'Ausgespielt',
+            self::TooSlow => 'Zu langsam',
             self::Abandoned => 'Abbruch',
-            self::KingOfTheHill => 'König erreichte den Hügel',
-            self::ThreeCheck => 'Drittes Schach',
-            self::BughousePartnerLose => 'Bughouse-Partner verlor',
+            self::Unknown => 'Unbekannt',
         };
     }
 }

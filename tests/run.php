@@ -41,31 +41,14 @@ $assertContains = static function (string $needle, string $haystack, string $mes
 };
 
 $lossReasonLabels = [
-    'checkmated' => 'Schachmatt',
-    'timeout' => 'Zeitüberschreitung',
-    'resigned' => 'Aufgabe',
-    'lose' => 'Sonstige Niederlage',
-    'abandoned' => 'Abbruch',
-    'kingofthehill' => 'König erreichte den Hügel',
-    'threecheck' => 'Drittes Schach',
-    'bughousepartnerlose' => 'Bughouse-Partner verlor',
+    LossReason::Blunder->value => 'Blunder',
+    LossReason::Outplayed->value => 'Ausgespielt',
+    LossReason::TooSlow->value => 'Zu langsam',
+    LossReason::Abandoned->value => 'Abbruch',
+    LossReason::Unknown->value => 'Unbekannt',
 ];
-
-foreach ($lossReasonLabels as $result => $label) {
-    $game = Game::fromApi(
-        [
-            'url' => 'https://www.chess.com/game/live/' . $result,
-            'white' => ['username' => 'Player', 'rating' => 1200, 'result' => $result],
-            'black' => ['username' => 'Opponent', 'rating' => 1250, 'result' => 'win'],
-            'end_time' => 1_700_000_000,
-            'time_class' => 'blitz',
-            'time_control' => '300',
-            'rules' => 'chess',
-        ],
-        'player',
-    );
-    $assertSame($result, $game->lossReason?->value, 'The documented loss result must be retained.');
-    $assertSame($label, $game->lossReason?->label(), 'The documented loss result must have the expected label.');
+foreach (LossReason::cases() as $lossReason) {
+    $assertSame($lossReasonLabels[$lossReason->value], $lossReason->label(), 'Every loss category needs its label.');
 }
 
 $draw = Game::fromApi(
@@ -78,23 +61,52 @@ $draw = Game::fromApi(
 );
 $assertSame(null, $draw->lossReason, 'A draw result must not become a loss reason.');
 
-$unknownLoss = Game::fromApi(
+$pendingLoss = Game::fromApi(
     [
-        'url' => 'https://www.chess.com/game/live/unknown',
-        'white' => ['username' => 'Player', 'result' => 'future-result'],
-        'black' => ['username' => 'Opponent', 'result' => 'win'],
-    ],
-    'player',
-);
-$assertSame(null, $unknownLoss->lossReason, 'An undocumented result must not be presented as a known loss reason.');
-$checkmatedLoss = Game::fromApi(
-    [
-        'url' => 'https://www.chess.com/game/live/new-checkmate',
+        'url' => 'https://www.chess.com/game/live/pending',
         'white' => ['username' => 'Player', 'result' => 'checkmated'],
         'black' => ['username' => 'Opponent', 'result' => 'win'],
+        'rules' => 'chess',
+        'pgn' => '1. f3 e5 2. g4 Qh4#',
     ],
     'player',
 );
+$assertSame(LossReason::Unknown, $pendingLoss->lossReason, 'A board loss must await Stockfish analysis.');
+$assertSame(null, $pendingLoss->lossAnalysisVersion, 'An analyzable board loss must remain pending.');
+
+$tooSlowLoss = Game::fromApi(
+    [
+        'url' => 'https://www.chess.com/game/live/timeout',
+        'white' => ['username' => 'Player', 'result' => 'timeout'],
+        'black' => ['username' => 'Opponent', 'result' => 'win'],
+    ],
+    'player',
+);
+$assertSame(LossReason::TooSlow, $tooSlowLoss->lossReason, 'A timeout must be classified without Stockfish.');
+$assertSame(LossReason::ANALYSIS_VERSION, $tooSlowLoss->lossAnalysisVersion, 'A timeout must be complete.');
+
+$abandonedLoss = Game::fromApi(
+    [
+        'url' => 'https://www.chess.com/game/live/abandoned',
+        'white' => ['username' => 'Player', 'result' => 'abandoned'],
+        'black' => ['username' => 'Opponent', 'result' => 'win'],
+    ],
+    'player',
+);
+$assertSame(LossReason::Abandoned, $abandonedLoss->lossReason, 'An abandoned game must remain distinct.');
+
+$variantLoss = Game::fromApi(
+    [
+        'url' => 'https://www.chess.com/game/live/variant',
+        'white' => ['username' => 'Player', 'result' => 'threecheck'],
+        'black' => ['username' => 'Opponent', 'result' => 'win'],
+        'rules' => 'threecheck',
+        'pgn' => '1. e4 e5',
+    ],
+    'player',
+);
+$assertSame(LossReason::Unknown, $variantLoss->lossReason, 'Unsupported variants must remain unknown.');
+$assertSame(LossReason::ANALYSIS_VERSION, $variantLoss->lossAnalysisVersion, 'Unsupported variants must not be queued.');
 
 $databasePath = sys_get_temp_dir() . '/chessmaster-loss-reasons-' . bin2hex(random_bytes(8)) . '.sqlite';
 
@@ -128,39 +140,92 @@ try {
         "INSERT INTO games VALUES (
             'https://www.chess.com/game/live/legacy', 'player', 'LegacyOpponent', 'white', 1200, 1250,
             'resigned', 'win', 0, 1700000000, 'blitz', '300', 'chess', 1, NULL, NULL,
-            'Italian Game', NULL, '', '{}'
+            'Italian Game', NULL, '1. e4 e5', '{}'
+        );
+        INSERT INTO games VALUES (
+            'https://www.chess.com/game/live/legacy-timeout', 'player', 'SlowOpponent', 'white', 1200, 1250,
+            'timeout', 'win', 0, 1699999999, 'blitz', '300', 'chess', 1, NULL, NULL,
+            'Italian Game', NULL, '1. e4 e5', '{}'
+        );
+        INSERT INTO games VALUES (
+            'https://www.chess.com/game/live/legacy-abandoned', 'player', 'GoneOpponent', 'white', 1200, 1250,
+            'abandoned', 'win', 0, 1699999998, 'blitz', '300', 'chess', 1, NULL, NULL,
+            'Italian Game', NULL, '1. e4 e5', '{}'
         )",
     );
     $legacyDatabase = null;
 
     $repository = new GameRepository($databasePath);
     $history = $repository->history('Player', 1, 100);
-    $assertSame(LossReason::Resigned, $history->games[0]->lossReason, 'The migration must backfill existing losses.');
+    $historyByUrl = [];
+    foreach ($history->games as $historyGame) {
+        $historyByUrl[$historyGame->url] = $historyGame;
+    }
+    $assertSame(
+        LossReason::Unknown,
+        $historyByUrl['https://www.chess.com/game/live/legacy']->lossReason,
+        'Old board results must await analysis.',
+    );
+    $assertSame(
+        null,
+        $historyByUrl['https://www.chess.com/game/live/legacy']->lossAnalysisVersion,
+        'An old standard loss must be queued.',
+    );
+    $assertSame(
+        LossReason::TooSlow,
+        $historyByUrl['https://www.chess.com/game/live/legacy-timeout']->lossReason,
+        'Old timeouts must migrate directly.',
+    );
+    $assertSame(
+        LossReason::Abandoned,
+        $historyByUrl['https://www.chess.com/game/live/legacy-abandoned']->lossReason,
+        'Old abandoned games must migrate directly.',
+    );
 
     $repository->storeArchive(
         url: 'https://api.chess.com/pub/player/player/games/2023/11',
         etag: null,
         lastModified: null,
-        games: [$checkmatedLoss, $unknownLoss],
+        games: [$pendingLoss, $variantLoss],
     );
+    $assertSame(
+        LossReason::Unknown,
+        $repository->pendingLossAnalysis('Player')?->lossReason,
+        'A standard board loss must be available for Stockfish.',
+    );
+    $assertSame(
+        true,
+        $repository->completeLossAnalysis(
+            'Player',
+            'https://www.chess.com/game/live/legacy',
+            LossReason::Blunder,
+        ),
+        'A Stockfish blunder classification must be persisted.',
+    );
+    $assertSame(
+        false,
+        $repository->completeLossAnalysis('Player', $pendingLoss->url, LossReason::TooSlow),
+        'Engine analysis must not overwrite documented terminal categories.',
+    );
+    $assertSame(
+        true,
+        $repository->completeLossAnalysis('Player', $pendingLoss->url, LossReason::Outplayed),
+        'A Stockfish outplayed classification must be persisted.',
+    );
+    $assertSame(null, $repository->pendingLossAnalysis('Player'), 'Completed and unsupported losses must leave the queue.');
+
+    $repository = new GameRepository($databasePath);
     $dashboard = $repository->dashboard('Player');
-    $assertSame(3, $dashboard->summary->losses, 'All known and unknown losses must remain in the total.');
+    $assertSame(5, $dashboard->summary->losses, 'Every loss category must remain in the total.');
     $lossReasonStatistics = [];
     foreach ($dashboard->lossReasons as $lossReasonStatistic) {
-        $lossReasonStatistics[$lossReasonStatistic->reason?->value ?? 'unknown'] = $lossReasonStatistic;
+        $lossReasonStatistics[$lossReasonStatistic->reason->value] = $lossReasonStatistic;
     }
-    $assertSame(1, $lossReasonStatistics['checkmated']->games, 'New loss reasons must be stored and aggregated.');
-    $assertSame(1, $lossReasonStatistics['resigned']->games, 'Backfilled loss reasons must be aggregated.');
-    $assertSame(
-        null,
-        $lossReasonStatistics['unknown']->reason,
-        'Unknown loss reasons must stay explicitly unavailable.',
-    );
-    $assertSame(
-        33.3,
-        round($lossReasonStatistics['checkmated']->percentage, 1),
-        'Loss reason percentages must use all losses.',
-    );
+    $assertSame(array_keys($lossReasonLabels), array_keys($lossReasonStatistics), 'Exactly five categories must exist.');
+    foreach ($lossReasonStatistics as $lossReasonStatistic) {
+        $assertSame(1, $lossReasonStatistic->games, 'Every fixture category must be aggregated once.');
+        $assertSame(20.0, $lossReasonStatistic->percentage, 'Percentages must use all losses.');
+    }
 
     $_SERVER['USERNAME'] = 'Player';
     $_SERVER['DATABASE'] = $databasePath;
@@ -176,10 +241,10 @@ try {
     );
     $statisticsHtml = $renderer->render(Page::Statistics, $config, $dashboard, null, $importResult);
     $assertContains('<th>Niederlagengrund</th>', $historyHtml, 'The history table must expose loss reasons.');
-    $assertContains('Aufgabe', $historyHtml, 'The history table must render a known loss reason.');
-    $assertContains('Nicht ermittelbar', $historyHtml, 'The history table must not invent an unknown loss reason.');
+    $assertContains('Blunder', $historyHtml, 'The history table must render an engine classification.');
+    $assertContains('Unbekannt', $historyHtml, 'The history table must render unknown losses explicitly.');
     $assertContains('Niederlagengründe', $statisticsHtml, 'The statistics page must aggregate loss reasons.');
-    $assertContains('33,3 %', $statisticsHtml, 'The statistics table must render loss reason percentages.');
+    $assertContains('20,0 %', $statisticsHtml, 'The statistics table must render loss reason percentages.');
 } finally {
     unset($_SERVER['USERNAME'], $_SERVER['DATABASE']);
     foreach ([$databasePath, $databasePath . '-shm', $databasePath . '-wal', $databasePath . '.lock'] as $path) {
