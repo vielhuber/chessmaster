@@ -254,11 +254,15 @@ table a:hover,
 }
 
 .table-scroll {
-    overflow-x: auto;
+    width: 100%;
+    min-width: 0;
+    overflow-x: clip;
 }
 
 table {
     width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
     border-collapse: collapse;
     font-size: 12px;
 }
@@ -268,7 +272,7 @@ td {
     padding: 10px 13px;
     border-bottom: 1px solid var(--line);
     text-align: left;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 }
 
 th {
@@ -288,6 +292,55 @@ tbody tr:last-child td {
 
 tbody tr:hover td {
     background: rgba(255, 255, 255, 0.018);
+}
+
+.history-table th:nth-child(1) {
+    width: 13%;
+}
+
+.history-table th:nth-child(2) {
+    width: 12%;
+}
+
+.history-table th:nth-child(3) {
+    width: 6%;
+}
+
+.history-table th:nth-child(4) {
+    width: 14%;
+}
+
+.history-table th:nth-child(5),
+.history-table th:nth-child(6) {
+    width: 8%;
+}
+
+.history-table th:nth-child(7) {
+    width: 9%;
+}
+
+.history-table th:nth-child(8) {
+    width: 24%;
+}
+
+.history-table th:nth-child(9) {
+    width: 6%;
+}
+
+.loss-reason-table th:first-child {
+    width: 60%;
+}
+
+.loss-reason-table th:not(:first-child) {
+    width: 20%;
+}
+
+.openings-table th:first-child {
+    width: 55%;
+}
+
+.openings-table th:not(:first-child) {
+    width: 15%;
 }
 
 td small {
@@ -965,6 +1018,58 @@ td small {
 
     .opening-example-board {
         max-width: 520px;
+    }
+
+    table,
+    tbody,
+    tr,
+    td {
+        display: block;
+        width: 100%;
+    }
+
+    thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        border-bottom: 1px solid var(--line);
+    }
+
+    tbody tr:last-child {
+        border-bottom: 0;
+    }
+
+    td,
+    tbody tr:last-child td {
+        min-width: 0;
+        border-bottom: 0;
+    }
+
+    td::before {
+        display: block;
+        margin-bottom: 3px;
+        color: var(--muted);
+        content: attr(data-label);
+        font-size: 8px;
+        font-weight: 700;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+    }
+
+    .history-table td:nth-child(8),
+    .openings-table td:first-child {
+        grid-column: 1 / -1;
     }
 }
 
