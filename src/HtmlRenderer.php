@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace vielhuber\chessmaster;
 
+use DateTimeImmutable;
 use JsonException;
 
 final class HtmlRenderer
@@ -33,6 +34,23 @@ final class HtmlRenderer
         }
         $timezone = $config->timezone;
         $username = $config->username;
+        $currentYear = (new DateTimeImmutable('now', $timezone))->format('Y');
+        clearstatcache(true, $config->databasePath);
+        $databaseSizeBytes = is_file($config->databasePath) ? filesize($config->databasePath) : false;
+        if ($databaseSizeBytes === false) {
+            throw ChessmasterException::storage('Die Größe der SQLite-Datenbank konnte nicht gelesen werden.');
+        }
+        $databaseSize = (float) $databaseSizeBytes;
+        $databaseSizeUnits = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        $databaseSizeUnitIndex = 0;
+        while ($databaseSize >= 1024 && $databaseSizeUnitIndex < count($databaseSizeUnits) - 1) {
+            $databaseSize /= 1024;
+            $databaseSizeUnitIndex++;
+        }
+        $formattedDatabaseSize =
+            number_format($databaseSize, $databaseSizeUnitIndex === 0 ? 0 : 2, ',', '.') .
+            ' ' .
+            $databaseSizeUnits[$databaseSizeUnitIndex];
         $template = dirname(__DIR__) . '/templates/index.php';
 
         ob_start();

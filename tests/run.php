@@ -240,11 +240,25 @@ try {
         $importResult,
     );
     $statisticsHtml = $renderer->render(Page::Statistics, $config, $dashboard, null, $importResult);
+    clearstatcache(true, $databasePath);
+    $databaseSize = filesize($databasePath);
+    $assertSame(true, is_int($databaseSize), 'The rendered database file must have a measurable size.');
+    $assertSame(true, $databaseSize < 1024 ** 2, 'The database fixture must remain small enough for a KiB assertion.');
     $assertContains('<th>Niederlagengrund</th>', $historyHtml, 'The history table must expose loss reasons.');
     $assertContains('Blunder', $historyHtml, 'The history table must render an engine classification.');
     $assertContains('Unbekannt', $historyHtml, 'The history table must render unknown losses explicitly.');
     $assertContains('Niederlagengründe', $statisticsHtml, 'The statistics page must aggregate loss reasons.');
     $assertContains('20,0 %', $statisticsHtml, 'The statistics table must render loss reason percentages.');
+    $assertContains(
+        '© ' . (new DateTimeImmutable('now', $config->timezone))->format('Y') . ' David Vielhuber',
+        $historyHtml,
+        'The footer must render the current year and copyright holder.',
+    );
+    $assertContains(
+        'SQLite · ' . number_format($databaseSize / 1024, 2, ',', '.') . ' KiB',
+        $historyHtml,
+        'The footer must render the actual database file size in binary German formatting.',
+    );
 } finally {
     unset($_SERVER['USERNAME'], $_SERVER['DATABASE']);
     foreach ([$databasePath, $databasePath . '-shm', $databasePath . '-wal', $databasePath . '.lock'] as $path) {
