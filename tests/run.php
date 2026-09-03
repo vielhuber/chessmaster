@@ -260,6 +260,12 @@ try {
         $assertContains($quoteSourceUrl, $historyHtml, 'Every documented quote source must be linked.');
     }
     $assertContains('<th>Niederlagengrund</th>', $historyHtml, 'The history table must expose loss reasons.');
+    $assertContains('<th>Eigenanalyse</th>', $historyHtml, 'The history table must expose self-analysis links.');
+    $assertContains(
+        'href="https://www.chess.com/analysis/game/live/legacy/analysis"',
+        $historyHtml,
+        'Every self-analysis link must open the corresponding Chess.com analysis.',
+    );
     $assertContains('Blunder', $historyHtml, 'The history table must render an engine classification.');
     $assertContains('Unbekannt', $historyHtml, 'The history table must render unknown losses explicitly.');
     $assertContains('Niederlagengründe', $statisticsHtml, 'The statistics page must aggregate loss reasons.');
