@@ -240,6 +240,21 @@ try {
         $importResult,
     );
     $statisticsHtml = $renderer->render(Page::Statistics, $config, $dashboard, null, $importResult);
+    $quoteSourceUrls = [
+        'https://www.chesshistory.com/winter/extra/tarrasch.html',
+        'https://www.chesshistory.com/winter/extra/lasker1.html',
+        'https://www.chesshistory.com/winter/extra/philidor.html',
+        'https://www.gutenberg.org/files/33870/33870-h/33870-h.htm',
+        'https://founders.archives.gov/documents/Franklin/01-29-02-0608',
+        'https://www.gutenberg.org/files/17508/17508-h/17508-h.htm',
+    ];
+    $assertSame(1, substr_count($historyHtml, '<blockquote>'), 'Every response must contain exactly one quote.');
+    $assertSame(1, substr_count($historyHtml, '<cite>— '), 'Every quote must contain one unlinked attribution.');
+    $assertSame(6, substr_count($historyHtml, 'class="quote-source"'), 'Every source must be listed once.');
+    $assertContains('<details class="quote-sources">', $historyHtml, 'The source list must use native disclosure.');
+    foreach ($quoteSourceUrls as $quoteSourceUrl) {
+        $assertContains($quoteSourceUrl, $historyHtml, 'Every documented quote source must be linked.');
+    }
     $assertContains('<th>Niederlagengrund</th>', $historyHtml, 'The history table must expose loss reasons.');
     $assertContains('Blunder', $historyHtml, 'The history table must render an engine classification.');
     $assertContains('Unbekannt', $historyHtml, 'The history table must render unknown losses explicitly.');

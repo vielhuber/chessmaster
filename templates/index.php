@@ -67,6 +67,24 @@ $navigation = [
                 <button class="sync-button" type="submit">Spiele aktualisieren</button>
             </form>
         </div>
+        <div class="shell header-quote">
+            <blockquote>
+                <p>„<?= $escape($chessQuote['text']) ?>“</p>
+                <cite>— <?= $escape($chessQuote['author']) ?></cite>
+            </blockquote>
+            <details class="quote-sources">
+                <summary>Quellen</summary>
+                <ol>
+                    <?php foreach ($chessQuotes as $quote): ?>
+                        <li><a class="quote-source" href="<?= $escape($quote[
+                            'url'
+                        ]) ?>" target="_blank" rel="noopener noreferrer"><?= $escape(
+    $quote['source'],
+) ?> ↗</a></li>
+                    <?php endforeach; ?>
+                </ol>
+            </details>
+        </div>
     </header>
 
     <main class="shell page">
