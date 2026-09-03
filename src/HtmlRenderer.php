@@ -8,6 +8,45 @@ use JsonException;
 
 final class HtmlRenderer
 {
+    private const CHESS_QUOTES = [
+        [
+            'text' => 'Das Schach hat wie die Liebe, wie die Musik die Fähigkeit, den Menschen glücklich zu machen.',
+            'author' => 'Siegbert Tarrasch',
+            'source' => 'Siegbert Tarrasch: Das Schachspiel (Berlin 1931), Seite 4',
+            'url' => 'https://www.chesshistory.com/winter/extra/tarrasch.html',
+        ],
+        [
+            'text' => 'Nun, auf dem Schachbrett der Meister gilt Lüge und Heuchelei nicht lange.',
+            'author' => 'Emanuel Lasker',
+            'source' => 'Emanuel Lasker: Lehrbuch des Schachspiels (Berlin 1926), Seite 201',
+            'url' => 'https://www.chesshistory.com/winter/extra/lasker1.html',
+        ],
+        [
+            'text' => 'Die Bauern sind die Seele des Schachspiels.',
+            'author' => 'François-André Danican Philidor',
+            'source' => 'François-André Danican Philidor: L\'Analyze des Échecs (London 1749), Seite xix; deutsche Übersetzung',
+            'url' => 'https://www.chesshistory.com/winter/extra/philidor.html',
+        ],
+        [
+            'text' => 'Im Schach können sich die Taktiken ändern, doch die strategischen Grundprinzipien bleiben immer gleich.',
+            'author' => 'José Raúl Capablanca',
+            'source' => 'José Raúl Capablanca: Chess Fundamentals, Vorwort zur Ausgabe von 1934; deutsche Übersetzung',
+            'url' => 'https://www.gutenberg.org/files/33870/33870-h/33870-h.htm',
+        ],
+        [
+            'text' => 'Man mag zwar die Partie gegen seinen Gegner verlieren, gewinnt aber etwas Besseres: seine Achtung, seinen Respekt und seine Zuneigung.',
+            'author' => 'Benjamin Franklin',
+            'source' => 'Benjamin Franklin: The Morals of Chess (Fassung von 1786); deutsche Übersetzung',
+            'url' => 'https://founders.archives.gov/documents/Franklin/01-29-02-0608',
+        ],
+        [
+            'text' => 'Die Leidenschaft für das Schachspiel ist eine der unerklärlichsten der Welt.',
+            'author' => 'H. G. Wells',
+            'source' => 'H. G. Wells: Certain Personal Matters, Concerning Chess (1897); deutsche Übersetzung',
+            'url' => 'https://www.gutenberg.org/files/17508/17508-h/17508-h.htm',
+        ],
+    ];
+
     /**
      * Isolate presentation variables from application orchestration.
      */
@@ -51,6 +90,8 @@ final class HtmlRenderer
             number_format($databaseSize, $databaseSizeUnitIndex === 0 ? 0 : 2, ',', '.') .
             ' ' .
             $databaseSizeUnits[$databaseSizeUnitIndex];
+        $chessQuotes = self::CHESS_QUOTES;
+        $chessQuote = $chessQuotes[random_int(0, count($chessQuotes) - 1)];
         $template = dirname(__DIR__) . '/templates/index.php';
 
         ob_start();
