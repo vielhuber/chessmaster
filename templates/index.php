@@ -107,13 +107,15 @@ $navigation = [
                         <thead>
                             <tr>
                                 <th>Datum</th><th>Gegner</th><th>Score</th><th>Niederlagengrund</th><th>Farbe</th>
-                                <th>Rating</th><th>Tempo</th><th>Eröffnung</th><th>Partie</th>
+                                <th>Rating</th><th>Tempo</th><th>Eröffnung</th><th>Partie</th><th>Eigenanalyse</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($history->games as $game): ?>
                                 <?php
                                 $playedAt = new DateTimeImmutable('@' . $game->playedAt)->setTimezone($timezone);
+                                $selfAnalysisUrl =
+                                    str_replace('/game/', '/analysis/game/', rtrim($game->url, '/')) . '/analysis';
                                 $timeControl = $game->timeControl;
                                 if (preg_match('/^(\d+)(?:\+(\d+))?$/', $timeControl, $matches) === 1) {
                                     $baseSeconds = (int) $matches[1];
@@ -143,6 +145,9 @@ $navigation = [
                                     <td><a class="game-link" href="<?= $escape(
                                         $game->url,
                                     ) ?>" target="_blank" rel="noopener noreferrer" aria-label="Partie auf Chess.com öffnen" title="Partie auf Chess.com öffnen">↗</a></td>
+                                    <td><a class="game-link" href="<?= $escape(
+                                        $selfAnalysisUrl,
+                                    ) ?>" target="_blank" rel="noopener noreferrer" aria-label="Eigenanalyse auf Chess.com öffnen" title="Eigenanalyse auf Chess.com öffnen">↗</a></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
