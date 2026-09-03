@@ -240,6 +240,9 @@ try {
         $importResult,
     );
     $statisticsHtml = $renderer->render(Page::Statistics, $config, $dashboard, null, $importResult);
+    $openingsHtml = $renderer->render(Page::Openings, $config, $dashboard, null, $importResult);
+    $stylesheet = file_get_contents(dirname(__DIR__) . '/_public/assets/style.css');
+    $assertSame(true, is_string($stylesheet), 'The responsive table stylesheet must be readable.');
     clearstatcache(true, $databasePath);
     $databaseSize = filesize($databasePath);
     $assertSame(true, is_int($databaseSize), 'The rendered database file must have a measurable size.');
@@ -266,10 +269,18 @@ try {
         $historyHtml,
         'Every self-analysis link must open the corresponding Chess.com analysis.',
     );
+    $assertContains('class="history-table"', $historyHtml, 'The history table must opt into its responsive layout.');
+    $assertContains('data-label="Niederlagengrund"', $historyHtml, 'Responsive history cells need their labels.');
+    $assertContains('data-label="Eigenanalyse"', $historyHtml, 'Responsive self-analysis cells need their labels.');
     $assertContains('Blunder', $historyHtml, 'The history table must render an engine classification.');
     $assertContains('Unbekannt', $historyHtml, 'The history table must render unknown losses explicitly.');
     $assertContains('Niederlagengründe', $statisticsHtml, 'The statistics page must aggregate loss reasons.');
+    $assertContains('class="loss-reason-table"', $statisticsHtml, 'The loss reason table must stay responsive.');
     $assertContains('20,0 %', $statisticsHtml, 'The statistics table must render loss reason percentages.');
+    $assertContains('class="openings-table"', $openingsHtml, 'The openings table must stay responsive.');
+    $assertContains('overflow-x: clip;', $stylesheet, 'Table containers must not scroll horizontally.');
+    $assertContains('table-layout: fixed;', $stylesheet, 'Tables must remain constrained to their available width.');
+    $assertContains('overflow-wrap: anywhere;', $stylesheet, 'Table content must wrap instead of overflowing.');
     $assertContains(
         '© ' . (new DateTimeImmutable('now', $config->timezone))->format('Y') . ' David Vielhuber',
         $historyHtml,

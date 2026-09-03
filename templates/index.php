@@ -103,7 +103,7 @@ $navigation = [
 
             <div class="panel table-panel">
                 <div class="table-scroll">
-                    <table>
+                    <table class="history-table">
                         <thead>
                             <tr>
                                 <th>Datum</th><th>Gegner</th><th>Score</th><th>Niederlagengrund</th><th>Farbe</th>
@@ -128,24 +128,24 @@ $navigation = [
                                 }
                                 ?>
                                 <tr>
-                                    <td><?= $playedAt->format('d.m.Y H:i') ?></td>
-                                    <td><strong><?= $escape(
+                                    <td data-label="Datum"><?= $playedAt->format('d.m.Y H:i') ?></td>
+                                    <td data-label="Gegner"><strong><?= $escape(
                                         $game->opponent,
                                     ) ?></strong><small><?= $game->opponentRating ?? '–' ?></small></td>
-                                    <td><span class="result <?= $resultClass($game->score) ?>"><?= $score(
+                                    <td data-label="Score"><span class="result <?= $resultClass($game->score) ?>"><?= $score(
     $game->score,
 ) ?></span></td>
-                                    <td><?= $game->lossReason !== null ? $escape($game->lossReason->label()) : '–' ?></td>
-                                    <td><?= $game->playerColor === 'white' ? 'Weiß' : 'Schwarz' ?></td>
-                                    <td><?= $game->playerRating ?? '–' ?></td>
-                                    <td><?= $escape(ucfirst($game->timeClass)) ?><small><?= $escape(
+                                    <td data-label="Niederlagengrund"><?= $game->lossReason !== null ? $escape($game->lossReason->label()) : '–' ?></td>
+                                    <td data-label="Farbe"><?= $game->playerColor === 'white' ? 'Weiß' : 'Schwarz' ?></td>
+                                    <td data-label="Rating"><?= $game->playerRating ?? '–' ?></td>
+                                    <td data-label="Tempo"><?= $escape(ucfirst($game->timeClass)) ?><small><?= $escape(
     $timeControl,
 ) ?></small></td>
-                                    <td><?= $escape($game->openingName) ?></td>
-                                    <td><a class="game-link" href="<?= $escape(
+                                    <td data-label="Eröffnung"><?= $escape($game->openingName) ?></td>
+                                    <td data-label="Partie"><a class="game-link" href="<?= $escape(
                                         $game->url,
                                     ) ?>" target="_blank" rel="noopener noreferrer" aria-label="Partie auf Chess.com öffnen" title="Partie auf Chess.com öffnen">↗</a></td>
-                                    <td><a class="game-link" href="<?= $escape(
+                                    <td data-label="Eigenanalyse"><a class="game-link" href="<?= $escape(
                                         $selfAnalysisUrl,
                                     ) ?>" target="_blank" rel="noopener noreferrer" aria-label="Eigenanalyse auf Chess.com öffnen" title="Eigenanalyse auf Chess.com öffnen">↗</a></td>
                                 </tr>
@@ -227,14 +227,14 @@ $navigation = [
                         <h2>Niederlagengründe</h2><span><?= $dashboard->summary->losses ?> Niederlagen</span>
                     </div>
                     <div class="table-scroll">
-                        <table>
+                        <table class="loss-reason-table">
                             <thead><tr><th>Grund</th><th>Partien</th><th>Anteil</th></tr></thead>
                             <tbody>
                                 <?php foreach ($dashboard->lossReasons as $lossReason): ?>
                                     <tr>
-                                        <td><?= $escape($lossReason->reason->label()) ?></td>
-                                        <td><?= $lossReason->games ?></td>
-                                        <td><?= number_format($lossReason->percentage, 1, ',', '.') ?> %</td>
+                                        <td data-label="Grund"><?= $escape($lossReason->reason->label()) ?></td>
+                                        <td data-label="Partien"><?= $lossReason->games ?></td>
+                                        <td data-label="Anteil"><?= number_format($lossReason->percentage, 1, ',', '.') ?> %</td>
                                     </tr>
                                 <?php endforeach; ?>
                             </tbody>
@@ -298,12 +298,12 @@ $navigation = [
 
             <div class="panel table-panel">
                 <div class="table-scroll">
-                    <table>
+                    <table class="openings-table">
                         <thead><tr><th>Eröffnung</th><th>Partien</th><th>+ / = / −</th><th>Score</th></tr></thead>
                         <tbody>
                             <?php foreach ($dashboard->openings as $opening): ?>
                                 <tr>
-                                    <td>
+                                    <td data-label="Eröffnung">
                                         <?php if ($opening->url !== null): ?>
                                             <a href="<?= $escape(
                                                 $opening->url,
@@ -314,9 +314,9 @@ $navigation = [
                                             <?= $escape($opening->name) ?>
                                         <?php endif; ?>
                                     </td>
-                                    <td><?= $opening->games ?></td>
-                                    <td><?= $opening->wins ?> / <?= $opening->draws ?> / <?= $opening->losses ?></td>
-                                    <td><span class="bar"><i style="width: <?= min(
+                                    <td data-label="Partien"><?= $opening->games ?></td>
+                                    <td data-label="+ / = / −"><?= $opening->wins ?> / <?= $opening->draws ?> / <?= $opening->losses ?></td>
+                                    <td data-label="Score"><span class="bar"><i style="width: <?= min(
                                         100,
                                         max(0, $opening->scorePercentage),
                                     ) ?>%"></i></span><?= number_format(
