@@ -26,6 +26,10 @@ html {
 }
 
 body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
     margin: 0;
     background: var(--background);
     color: var(--text);
@@ -131,7 +135,23 @@ table a:hover,
 }
 
 .page {
+    flex: 1 0 auto;
     padding-block: 34px 48px;
+}
+
+.site-footer {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 50px;
+    gap: 20px;
 }
 
 .page-heading {
@@ -883,6 +903,15 @@ td small {
 
     .sync-status {
         display: none;
+    }
+
+    .footer-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        min-height: 0;
+        gap: 3px;
+        padding-block: 13px;
     }
 
     .page-heading {

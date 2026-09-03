@@ -343,5 +343,12 @@ $navigation = [
             </div>
         <?php endif; ?>
     </main>
+
+    <footer class="site-footer">
+        <div class="shell footer-inner">
+            <span>© <?= $currentYear ?> David Vielhuber</span>
+            <span>SQLite · <?= $formattedDatabaseSize ?></span>
+        </div>
+    </footer>
 </body>
 </html>
