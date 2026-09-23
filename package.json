@@ -9,11 +9,11 @@
         "@prettier/plugin-php": "^0.25.0",
         "chart.js": "^4.5.1",
         "chess.js": "^1.4.0",
-        "prettier": "^3.9.6",
-        "stockfish": "^18.0.8"
+        "prettier": "^3.9.9",
+        "stockfish": "^19.0.0"
     },
     "allowScripts": {
         "stockfish": false
     },
-    "version": "1.0.3"
+    "version": "1.0.4"
 }
